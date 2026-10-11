@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inside the LibRate app</title>
+<link rel="stylesheet" href="guide.css">
+<style>
+  .why { margin: 4px 0 14px 0; padding: 8px 12px; background: var(--bg); border-radius: 6px; font-size: 10.3pt; }
+  .why b { color: var(--brand); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img src="icon.png" alt="LibRate icon">
+  <div>
+    <h1>Inside the app</h1>
+    <div class="tagline">Every screen, every switch — and why it was built that way.</div>
+    <div class="meta">Document 3 of 4 · Version 1.0 · Contact: keshavgithub01@gmail.com</div>
+  </div>
+</div>
+
+<p>This document walks through LibRate screen by screen. Each section ends with a <b>Why</b> note: the design
+decision behind it. Several of these choices look odd for a normal messenger; they make sense for a tool
+whose users may be in a crowd, offline, and under observation.</p>
+
+<h2>1. First run</h2>
+<p>Three short screens: <i>what this is</i>, <i>your name</i>, <i>three permissions</i>. A key pair is generated
+silently before the first screen appears; the name step shows the generated name with a pen icon to change
+it. The permissions step asks for Nearby devices, Notifications and Background activity in one go ("Allow
+all") or can be skipped ("Not now").</p>
+<div class="why"><b>Why a generated name?</b> People under pressure type their real name out of habit. Offering a
+ready-made one (<i>Brave Otter</i>) makes the anonymous choice the default. <b>Why ask permissions after a
+screen of explanation?</b> Android's dialogs are terse; a user who understands why Bluetooth is needed is far
+more likely to grant it, and far less likely to leave the app broken.</div>
+
+<h2>2. Nearby</h2>
+<p>One public room for everyone in Bluetooth range plus whatever relays bridge in. Each message shows the
+sender's name and short ID, how it arrived (<code>BT</code> / <code>relay</code>) and the hop count. The
+<b>Bluetooth card</b> at the top reports: off → turn on; permission missing → allow; searching; or
+<i>N links · M people seen</i>. Nearby never sends notifications. Triple-tapping the title offers a wipe.</p>
+<div class="why"><b>Why no notifications for Nearby?</b> In a crowd it would buzz constantly and train people to
+ignore all alerts. Private chats and joined rooms notify; Nearby is for glancing. <b>Why show hop count and
+transport?</b> It is live feedback that the mesh is working, and it tells you how far your words are reaching.
+<b>Why the short ID next to names?</b> Anyone can pick any nickname; the ID (derived from the key) is what
+cannot be faked. Duplicate nicknames are flagged automatically.</div>
+
+<h2>3. Rooms</h2>
+<ul>
+  <li><b>Open rooms</b> — by name. Signed, public.</li>
+  <li><b>Password rooms</b> — name + password, encrypted. The password never leaves the phone.</li>
+  <li><b>Location rooms</b> — <i>Find my area</i> takes one coarse GPS fix and derives rooms for city, neighbourhood and block. Nothing is uploaded; the fix is not stored.</li>
+  <li><b>Groups</b> — rooms with a creator and admins; members can be removed; the creator can dismantle. Shared by QR invite.</li>
+</ul>
+<div class="why"><b>Why location rooms from a single fix?</b> People in the same place need a room they can all
+guess without coordination. One coarse fix, used once and discarded, gives that without tracking anyone.
+<b>Why can admins remove members but there is no server?</b> The creator signs a charter listing admins;
+removals are signed too. Each phone checks the signatures and drops frames from removed members. Moderation
+without a moderator server. <b>Why do invites carry relay addresses?</b> So a group formed offline keeps
+working when members scatter and go online — they all land on the same relays.</div>
+
+<h2>4. Chats</h2>
+<p>Private, end-to-end encrypted. Start one by tapping a name in a room, from <i>People</i>, or by scanning a
+QR. Messages from strangers go under <b>Message requests</b> (one row with a count; tap to review, accept or
+decline-and-block). Ticks: pending → sent → delivered → seen; your bubbles change tint once read. Long-press a
+chat to favourite, mute, block or delete.</p>
+<div class="why"><b>Why message requests?</b> In a public mesh anyone can message anyone. Requests stop
+spam and harassment from reaching the main list while still letting a genuine stranger reach you.
+<b>Why are read receipts encrypted?</b> Otherwise a relay could see <i>that</i> you read a message, even
+without seeing its content.</div>
+
+<h2>5. People</h2>
+<p>Everyone seen in the last ten minutes: name, ID, avatar, Bluetooth/relay badge, hop distance. Tap for a
+profile with bio and QR; favourite, mute, block, or message.</p>
+<div class="why"><b>Why ten minutes?</b> Long enough to find someone who just spoke; short enough that the list
+reflects who is actually around now.</div>
+
+<h2>6. Settings</h2>
+<table>
+  <tr><th>Identity</th><td>Name, avatar, bio, your QR. <b>New identity</b>: a fresh key that keeps your name and can
+      hand your contacts over with a signed note from the old key.</td></tr>
+  <tr><th>Relays</th><td>Built-in relays shown as <code>Relay 1 ●●●●●●</code>; user-added relays show their host. Add by
+      address or QR; share yours as QR; import a list by QR.</td></tr>
+  <tr><th>Notifications</th><td>Master switch, per-chat mutes, and a health check for background permission with a
+      snooze (3 days / 1 week / never).</td></tr>
+  <tr><th>Messages</th><td>Keep forever (default) · auto-delete after N days · memory only.</td></tr>
+  <tr><th>Appearance</th><td>Auto / Light / Dark.</td></tr>
+  <tr><th>Privacy</th><td>Block screenshots (default on) · Cover traffic · Battery saver.</td></tr>
+  <tr><th>Danger zone</th><td>Panic wipe.</td></tr>
+  <tr><th>About</th><td>What LibRate is, the SHA-256 of this exact build, and where to get fresh links.</td></tr>
+</table>
+
+<h3>Why are the built-in relay addresses hidden?</h3>
+<div class="why">
+  Three reasons. <b>(1) Blocking.</b> A relay address that appears in every screenshot and every forwarded
+  message is trivial to add to a blocklist. Keeping addresses out of the UI means they spread only inside QR
+  codes and invites, between people who already trust each other. <b>(2) Safety of relay operators.</b> Whoever
+  runs a relay is the only identifiable party in the system. Not displaying the hostname gives them a layer
+  of distance. <b>(3) Honesty about what the user controls.</b> You cannot edit or remove built-in relays
+  anyway — they are a floor, not a choice — so showing the address invites copying it into places it should
+  not go. Your <i>own</i> added relays are shown in full because you chose them.
+</div>
+
+<h3>Why is "New identity" separate from wipe?</h3>
+<div class="why">Sometimes you want to break the link to your past key (it may have been seen somewhere) without losing
+your friends. Rotation signs a hand-off note with the old key so contacts' phones re-point to the new one
+automatically. Groups you created are dismantled, because the creator key is gone — that is the one thing a
+rotation cannot carry over, by design.</div>
+
+<h3>Why block screenshots by default?</h3>
+<div class="why">It stops the app from appearing in the recents switcher and in casual screen grabs — the most common
+way a chat leaks when a phone is glanced at or briefly taken. It can be turned off in Privacy for people who
+want to share screenshots deliberately.</div>
+
+<h3>Why is "Keep messages" default <i>forever</i> rather than ephemeral?</h3>
+<div class="why">Field testing showed people losing instructions they needed an hour later. Messages are encrypted at
+rest, and panic wipe is one tap away, so the safer default is to keep. <i>Memory only</i> exists for those who
+need nothing on disk.</div>
+
+<h3>Why cover traffic and battery saver?</h3>
+<div class="why">Cover traffic sends random dummy frames so an observer cannot tell when you actually speak. It costs
+battery, so it is off by default. Battery saver scans less often (2 s every 22 s) for long days.</div>
+
+<h3>Why show the SHA-256 of the installed build?</h3>
+<div class="why">APKs are shared hand to hand. Two people can compare the hash on their screens and know they are
+running the identical file — no website or app store needed to establish trust.</div>
+
+<h3>Why a Telegram handle and an e-mail in the app?</h3>
+<div class="why">Download links get blocked; people need a way to ask for a new one. These are the only
+identifying strings in the app, and they are there deliberately. Always verify what you are sent against the
+hash and certificate.</div>
+
+<h2>7. Slash commands</h2>
+<p><code>/nick Name</code> change name · <code>/join room</code> · <code>/who</code> list people · <code>/msg Name</code>
+open a private chat · <code>/block Name</code> · <code>/clear</code> this view · <code>/wipe</code> panic wipe.</p>
+<div class="why"><b>Why keep commands at all?</b> They are faster than menus with one thumb while walking, and they
+are the same muscle memory as IRC and BitChat.</div>
+
+<h2>8. Decisions that shape everything</h2>
+<table>
+  <tr><th>Text only</th><td>Small frames survive bad radio, fit many hops into little air time, and keep store-and-forward cheap.
+      Media would clog the mesh for everyone.</td></tr>
+  <tr><th>No accounts, no servers of our own</th><td>Nothing to subpoena, seize, or switch off. The relays are public, replaceable
+      and run by anyone.</td></tr>
+  <tr><th>7 hops</th><td>The same trade-off BitChat chose: beyond ~10 hops radio collisions cost more than reach gains. Store-and-forward
+      and a single online phone cover the distance instead.</td></tr>
+  <tr><th>Nostr as the relay protocol</th><td>Open, tiny, already deployed worldwide, and uses the same keys we already have. No
+      custom server to write or trust.</td></tr>
+  <tr><th>Phone-to-phone distribution</th><td>The app's own channel can be blocked; a crowd cannot. The APK, its hash and this
+      documentation are meant to travel together.</td></tr>
+  <tr><th>No cloud backup</th><td>A backup is a copy of your private key somewhere you do not control. Losing the phone means losing
+      the identity — that is the price of there being exactly one copy.</td></tr>
+  <tr><th>Obfuscated release build</th><td>Makes a tampered fork harder to produce quickly. The source remains open; obfuscation protects
+      the binary, not the code.</td></tr>
+  <tr><th>Open source, protected name</th><td>Anyone may read, build and fork. Forks must use a different name and logo so people
+      can tell a genuine build from a modified one.</td></tr>
+</table>
+
+<footer>LibRate · Document 3 of 4 · Contact: keshavgithub01@gmail.com</footer>
+</body>
+</html>

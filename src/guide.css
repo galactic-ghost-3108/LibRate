@@ -1,0 +1,31 @@
+@page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+:root { --ink:#15201c; --muted:#5b6b66; --brand:#1E5F52; --accent:#3DBE9A; --bg:#eef5f2; --line:#d5e0dc; }
+* { box-sizing: border-box; }
+body { font: 11pt/1.5 "Segoe UI", "Nirmala UI", Roboto, Arial, sans-serif; color: var(--ink); margin: 0; }
+body.hi { font-family: "Nirmala UI", "Noto Sans Devanagari", "Mangal", "Segoe UI", sans-serif; font-size: 11.5pt; line-height: 1.7; }
+h1, h2, h3 { color: var(--brand); line-height: 1.25; break-after: avoid; }
+h1 { font-size: 26pt; margin: 0 0 4px; }
+h2 { font-size: 15.5pt; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); }
+h3 { font-size: 12.5pt; margin: 16px 0 4px; color: var(--ink); }
+p { margin: 6px 0 10px; }
+ul, ol { margin: 4px 0 10px; padding-left: 22px; }
+li { margin: 3px 0; }
+code, kbd { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; background: var(--bg); padding: 1px 4px; border-radius: 3px; }
+pre { font-family: Consolas, monospace; font-size: 9pt; background: var(--bg); padding: 10px 12px; border-radius: 6px; overflow: hidden; white-space: pre-wrap; word-break: break-all; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 10.3pt; break-inside: avoid; }
+th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+th { background: var(--bg); color: var(--brand); font-weight: 600; width: 26%; }
+.cover { display: flex; align-items: center; gap: 22px; padding: 10px 0 18px; border-bottom: 3px solid var(--brand); margin-bottom: 18px; }
+.cover img { width: 110px; height: 110px; border-radius: 24px; }
+.tagline { font-size: 14pt; color: var(--muted); margin: 2px 0 8px; }
+.meta { font-size: 9.5pt; color: var(--muted); }
+.box { background: var(--bg); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 10px 0 14px; break-inside: avoid; }
+.warn { background: #fff4e5; border-left-color: #e08a00; }
+.diagram { font-family: Consolas, monospace; font-size: 9.2pt; background: #0F1A17; color: #E8F3EE; padding: 12px 14px; border-radius: 8px; white-space: pre; margin: 8px 0 14px; }
+.diagram b { color: var(--accent); font-weight: normal; }
+.steps li { margin: 6px 0; }
+.two { columns: 2; column-gap: 24px; }
+.two li { break-inside: avoid; }
+footer { margin-top: 30px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 9pt; color: var(--muted); }
+.pb { break-before: page; }
+.fp { font-family: Consolas, monospace; font-size: 9.2pt; letter-spacing: 0.3px; word-break: break-all; }

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What is LibRate?</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+
+<div class="cover">
+  <img src="icon.png" alt="LibRate icon">
+  <div>
+    <h1>What is LibRate?</h1>
+    <div class="tagline">Talk to the people around you — with or without internet.</div>
+    <div class="meta">Document 1 of 4 · Version 1.0 · Android 8.0 and newer · Free software</div>
+  </div>
+</div>
+
+<h2>In one paragraph</h2>
+<p>LibRate is a free, anonymous messenger for Android that <b>does not need the internet</b>. Phones running
+LibRate find each other over Bluetooth and pass messages along from phone to phone, so a crowd becomes its
+own network. When any phone nearby does have a connection, the same messages also travel through small
+public relay servers to reach people further away. There are no accounts, no phone numbers, no company
+servers and nothing to sign up for. It was built in a single night after BitChat was banned in India ahead
+of a protest.</p>
+
+<h2>Why it exists</h2>
+<p>During large gatherings the mobile network is often the first thing to fail — switched off by order,
+overloaded by the crowd, or quietly monitored. Ordinary messengers stop working at exactly the moment people
+most need to coordinate: finding each other, warning about danger, agreeing where to go. LibRate is designed
+for that moment. It keeps working when the network does not, and it never asks who you are.</p>
+
+<h2>What makes it different</h2>
+<table>
+  <tr><th>No account</th><td>Your identity is a cryptographic key created on your phone the first time you open the app.
+      No one issues it, no one can suspend it, and nothing links it to your name or number.</td></tr>
+  <tr><th>Offline first</th><td>Messages hop between phones over Bluetooth, up to 7 hops. One hop already covers everyone
+      within ~10–30 m, so a dense crowd carries a message a few hundred metres with no network at all.</td></tr>
+  <tr><th>Online when possible</th><td>A single phone with data bridges the whole local crowd to the relays — and through
+      them to other crowds in other cities. The two paths join automatically.</td></tr>
+  <tr><th>Private</th><td>Direct chats and password rooms are end-to-end encrypted. Relays and bystanders see only scrambled data.</td></tr>
+  <tr><th>Nothing stored elsewhere</th><td>Messages live only on your phone, encrypted. No server keeps a copy. Cloud backup is disabled on purpose.</td></tr>
+  <tr><th>Disposable</th><td>One tap (or typing <code>/wipe</code>) erases the identity, keys, contacts and every message. You start again as a stranger.</td></tr>
+  <tr><th>Text only</th><td>No photos, voice or video. Small messages travel far over Bluetooth and survive bad conditions; large files would not.</td></tr>
+  <tr><th>Open</th><td>The source code is public. Anyone can read it, build it, or run their own relay.</td></tr>
+</table>
+
+<h2>What you can do with it</h2>
+<ul>
+  <li><b>Nearby</b> — one open channel for everyone within Bluetooth reach. See who is around and talk to all of them at once.</li>
+  <li><b>Rooms</b> — named channels (<code>#north-gate</code>), optionally protected by a password. Location rooms for your city, neighbourhood and block.</li>
+  <li><b>Groups</b> — rooms with a creator and admins who can remove members. Share them with a QR invite.</li>
+  <li><b>Private chats</b> — encrypted one-to-one conversations. Strangers appear as requests you can accept or decline.</li>
+  <li><b>People</b> — everyone seen in the last ten minutes, with how far away they are in hops.</li>
+</ul>
+
+<h2>Who it is for</h2>
+<ul>
+  <li>People at protests, marches, rallies, festivals and stadiums where networks fail.</li>
+  <li>Volunteers and medics who need to coordinate across a crowd.</li>
+  <li>Neighbourhoods during storms, floods and power cuts.</li>
+  <li>Anyone who wants to talk without creating an account or handing over a phone number.</li>
+</ul>
+
+<h2>What it is not</h2>
+<div class="box warn">
+  LibRate is not a replacement for Signal or WhatsApp in daily life — it is slower, text only, and reaches
+  only as far as the crowd or a relay reaches. It does not hide that you are <i>using</i> it: a phone running
+  LibRate is visible to other Bluetooth devices. It does not protect a phone that is seized unlocked. And it
+  cannot stop the <i>other</i> person in a chat from screenshotting or sharing what you wrote.
+</div>
+
+<h2>Getting it</h2>
+<ol class="steps">
+  <li>Get the APK file from someone you trust — best <b>phone to phone</b> over Bluetooth, Nearby Share or a cable. Links can be blocked; people cannot.</li>
+  <li>Choose <code>arm64-v8a</code> for most phones, <code>armeabi-v7a</code> for older or budget ones. If one refuses, try the other.</li>
+  <li>Open it. Android asks once to allow installs from this source. Then open LibRate, keep or edit your name, and tap <b>Allow all</b>.</li>
+  <li>Before trusting a copy, check its SHA-256 against <code>SHA256SUMS.txt</code> or a friend's copy. All genuine releases are signed with this certificate:
+      <div class="fp">7F:05:8A:F1:48:8C:A4:0A:AF:B2:14:86:D7:7A:64:24:19:9B:00:30:BB:38:A0:44:FA:11:B7:8D:7A:78:15:B6</div></li>
+</ol>
+<p>Updates installed over an existing copy keep all your data. Uninstalling deletes everything, permanently.</p>
+
+<h2>Learn more</h2>
+<p>Document 2 explains <i>how it works</i>; document 3 walks through <i>the app</i> and the reasoning behind its
+choices; document 4 is the <i>architecture</i> for engineers. Questions and new download links:
+<b>keshavgithub01@gmail.com</b>.</p>
+
+<footer>LibRate · free software · text only · no accounts · no servers of its own.</footer>
+</body>
+</html>

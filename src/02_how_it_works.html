@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How LibRate works</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+
+<div class="cover">
+  <img src="icon.png" alt="LibRate icon">
+  <div>
+    <h1>How LibRate works</h1>
+    <div class="tagline">Keys, frames, hops and relays — explained without jargon.</div>
+    <div class="meta">Document 2 of 4 · Version 1.0 · Contact: keshavgithub01@gmail.com</div>
+  </div>
+</div>
+
+<h2>1. The big picture</h2>
+<div class="diagram">   phone ──BT──┐                                     ┌──BT── phone
+   phone ──BT──┼─ <b>phone with data</b> ──wss──► <b>relays</b> ◄──wss── <b>phone with data</b> ─┼──BT── phone
+   phone ──BT──┘                                     └──BT── phone</div>
+<p>Two kinds of pipe carry the same messages. <b>Bluetooth</b> joins phones that are physically close.
+<b>Relays</b> join phones that have internet. Any phone that has both acts as a bridge. Nothing is
+configured; every phone simply does the same three things: listen, deliver, repeat once.</p>
+
+<h2>2. Your identity is a key</h2>
+<p>The first time LibRate opens it generates a <b>secp256k1 key pair</b> — the same type of key used by
+Nostr and Bitcoin. The <i>private</i> half is stored in the phone's secure storage and never leaves it.
+The <i>public</i> half is your address. From it the app derives a readable name (<i>Brave Otter</i>), an
+avatar and a colour, so people can recognise you without you typing anything. You can rename yourself at
+any time; the key underneath stays the same, which is why friends still recognise you.</p>
+<p>Your public key is shown as an <code>npub…</code> string and as a QR code. Scanning it is how someone
+starts a private chat with you — there is no directory to search and no server to ask.</p>
+
+<h2>3. Every message is a signed frame</h2>
+<p>When you send text, the app packs it into a compact binary <b>frame</b>:</p>
+<pre>┌────────┬──────────┬───────────┬──────────────┬─────┬──────────┬───────────┐
+│ sender │ timestamp│ room / to │ text (or     │ TTL │ frame id │ signature │
+│ pubkey │          │           │ ciphertext)  │     │          │ (Schnorr) │
+└────────┴──────────┴───────────┴──────────────┴─────┴──────────┴───────────┘</pre>
+<ul>
+  <li>The <b>signature</b> is made with your private key over everything except the TTL. Anyone can check
+      it with your public key; nobody can forge or alter the frame.</li>
+  <li>The <b>TTL</b> (time-to-live) starts at 7. Each phone that forwards the frame lowers it by one and
+      drops it at zero. Because the TTL is outside the signature, forwarding does not break it.</li>
+  <li>The <b>frame id</b> is a hash of the signed content. It is the same no matter which path the frame
+      takes — this is what lets Bluetooth and relay copies collapse into one.</li>
+</ul>
+
+<h2>4. The Bluetooth mesh</h2>
+<p>Every phone is simultaneously a Bluetooth <b>advertiser</b> ("I am here") and a <b>scanner</b> ("who is
+here?"). When two phones find each other they open a link and exchange frames in both directions. Larger
+frames are split into pieces that fit the link and reassembled on the other side.</p>
+<p>The forwarding rule is deliberately simple:</p>
+<ol>
+  <li>A frame arrives. Check the signature; if bad, drop it.</li>
+  <li>Have I seen this frame id before? If yes, drop it (duplicate).</li>
+  <li>Remember the id. Show the message if it is for a room I am in, or for me.</li>
+  <li>If TTL &gt; 1: lower it by one and send the frame <b>once</b> to every other linked phone.</li>
+</ol>
+<p>Step 2 prevents loops and storms; step 4 makes the message ripple outward. One hop reaches everyone within
+~10–30 m, so the area covered grows with the square of the hop count: seven hops is roughly a 250 m square
+— tens of thousands of people at protest density, provided the crowd is contiguous and enough phones run
+the app.</p>
+<div class="box">
+  <b>Store &amp; forward.</b> Phones hold recent frames for a while. When a new phone appears, anything it
+  missed is handed over. A person walking from the front of a march to the back physically carries the
+  messages with them — and they re-ripple on arrival.
+</div>
+
+<h2>5. Relays</h2>
+<p>A relay is a tiny public server speaking the open <b>Nostr</b> protocol: clients connect over a secure
+WebSocket (<code>wss://</code>), publish signed events, and subscribe to events they care about. LibRate wraps
+each frame in a Nostr event and uses the relay as a second pipe:</p>
+<ul>
+  <li>A phone with internet <b>publishes</b> every frame it hears (from Bluetooth or from the user) to its relays.</li>
+  <li>It also <b>subscribes</b>, and <b>injects</b> every frame that arrives from a relay into its Bluetooth neighbourhood.</li>
+  <li>Because the frame id is identical on both pipes, duplicates are discarded exactly as in the mesh.</li>
+</ul>
+<p>The result: one phone with one bar of signal connects a whole offline crowd to every other crowd using the
+same relays — in the next street or the next city. LibRate ships with a built-in relay list. Relays can also
+arrive inside QR codes: a room invite or someone's profile carries the relays they use, so groups naturally
+converge on the same servers. Anyone can run a relay in about ten minutes (see <code>docs/RELAY.md</code>),
+and relays can mirror each other so a blocked one is simply replaced.</p>
+
+<h2>6. Encryption</h2>
+<table>
+  <tr><th>Nearby, open rooms</th><td><b>Signed, not encrypted.</b> They are public by nature — like a megaphone. Encrypting them would add nothing.</td></tr>
+  <tr><th>Password rooms</th><td>The password is stretched with <b>Argon2id</b> into a key; each message is sealed with
+      <b>XChaCha20-Poly1305</b>. The password itself never travels. Without it, relays and bystanders see noise.</td></tr>
+  <tr><th>Private chats</th><td><b>NIP-44</b>: the two keys agree a shared secret (ECDH on secp256k1); messages are
+      encrypted with ChaCha20 and authenticated with HMAC-SHA256, padded so lengths leak less. Only the two phones can read them.</td></tr>
+  <tr><th>Groups with admins</th><td>The creator publishes a <b>signed charter</b> (admins, description). Removals and dismantling
+      are signed records too. Every phone verifies them independently — governance without a server.</td></tr>
+  <tr><th>On the phone</th><td>Messages, contacts and settings are stored encrypted with a device key. Screenshots are
+      blocked by default. Cloud backup is disabled.</td></tr>
+</table>
+
+<h2>7. Delivery ticks and read receipts</h2>
+<p>Your own bubbles show a small status: <i>pending</i> (not yet handed to any pipe), <i>sent</i> (a relay
+acknowledged it, or a Bluetooth peer accepted it), <i>delivered</i> (a peer echoed or forwarded it), and in
+private chats <i>seen</i> (the other phone sent back an encrypted acknowledgement). Read receipts are
+themselves private messages, so relays cannot tell that one was sent.</p>
+
+<h2>8. Staying alive in the background</h2>
+<p>Meshing only helps if the app keeps running while the screen is off. LibRate runs a foreground service
+(the persistent notification you see) and keeps its engine alive across screen locks and app switches.
+Phone makers' battery managers (ColorOS, MIUI, One UI) are aggressive; the app asks once for an exemption
+and reminds you later if it was revoked. Without it, messages wait until you reopen the app.</p>
+
+<h2>9. Updates and data</h2>
+<p>Installing a newer APK over the existing one keeps everything — identity, contacts, rooms, messages. Android
+only allows this when the new file is signed with the <b>same key</b>, so a tampered "update" cannot replace a
+genuine install. Uninstalling deletes everything permanently; there is no copy anywhere else, by design.</p>
+
+<h2>10. Contact</h2>
+<p>Questions, bug reports, relay addresses, or a fresh download link if yours is blocked:</p>
+<p style="font-size:13pt"><b>keshavgithub01@gmail.com</b></p>
+<p>Always verify what you receive: compare the APK's SHA-256 with <code>SHA256SUMS.txt</code> and check the
+signing certificate <span class="fp">7F:05:8A:F1:48:8C:A4:0A:AF:B2:14:86:D7:7A:64:24:19:9B:00:30:BB:38:A0:44:FA:11:B7:8D:7A:78:15:B6</span>.</p>
+
+<footer>LibRate · Document 2 of 4 · see also <i>What is LibRate</i>, <i>Inside the app</i>, <i>Architecture</i>.</footer>
+</body>
+</html>

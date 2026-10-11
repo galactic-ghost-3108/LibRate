@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LibRate architecture</title>
+<link rel="stylesheet" href="guide.css">
+<style>
+  .diagram { font-size: 8.8pt; line-height: 1.35; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img src="icon.png" alt="LibRate icon">
+  <div>
+    <h1>Architecture</h1>
+    <div class="tagline">Components, data flow, wire format, cryptography, storage, threat model.</div>
+    <div class="meta">Document 4 of 4 · Version 1.0 · For engineers and reviewers · Contact: keshavgithub01@gmail.com</div>
+  </div>
+</div>
+
+<h2>1. Components</h2>
+<div class="diagram">┌─────────────────────────────── Flutter UI ────────────────────────────────┐
+│  Nearby   │   Rooms / Groups   │   Chats (DM)   │   People   │  Settings  │
+└─────┬─────┴──────────┬─────────┴───────┬────────┴─────┬──────┴─────┬──────┘
+      │                │                 │              │            │
+      ▼                ▼                 ▼              ▼            ▼
+┌──────────────────────────── <b>MeshService</b> (Riverpod) ──────────────────────────┐
+│ identity · rooms &amp; charters · DMs · receipts · requests/contacts · notifications │
+│ retention sweeper · identity rotation · panic wipe · BLE status                   │
+└────────────┬──────────────────────────────┬──────────────────────┬────────────────┘
+             │                              │                      │
+             ▼                              ▼                      ▼
+   ┌─────────────────┐            ┌──────────────────┐   ┌──────────────────┐
+   │ <b>MeshEngine</b>      │            │ Encrypted store  │   │ Secure storage   │
+   │ flood · dedup   │            │ messages,        │   │ secp256k1        │
+   │ TTL · bridge    │            │ contacts, prefs  │   │ private key      │
+   │ deliveries      │            └──────────────────┘   └──────────────────┘
+   └───┬─────────┬───┘
+       │         │
+       ▼         ▼
+┌─────────────┐ ┌─────────────────┐       ┌─────────────────────────────┐
+│ <b>BLE</b>         │ │ <b>Nostr</b>           │       │ Foreground service          │
+│ transport   │ │ transport       │       │ keeps engine alive off-screen│
+│ dual role   │ │ 1 ws per relay  │       │ (cached FlutterEngine)      │
+│ fragments   │ │ backoff, OK ack │       └─────────────────────────────┘
+│ store&amp;fwd   │ └────────┬────────┘
+└──────┬──────┘          │
+       ▼                 ▼
+  nearby phones      wss:// relays</div>
+
+<p>The engine is transport-agnostic: it receives <code>Inbound(frame, via, peerId)</code> from either transport
+and emits frames to both. The service layer owns all semantics (rooms, DMs, governance). The UI is a thin
+Riverpod consumer.</p>
+
+<h3>Source layout</h3>
+<pre>lib/core/crypto      keys (BIP-340 Schnorr), NIP-44, Argon2id, XChaCha20-Poly1305, bytes
+lib/core/identity    Identity, readable names, avatar/colour derivation, nip19 (npub)
+lib/core/models      Frame, Message, Room, Charter, DeliveryLevel …
+lib/core/storage     encrypted store, settings (SharedPreferences), secure key storage
+lib/transport        mesh_engine, store_forward, ble/ble_transport, nostr/{nostr_transport,relay_connection,nostr_event}
+lib/services         mesh_service, notifications, foreground_service, native (method channel)
+lib/features         chat, rooms, dm, people, settings (screens + Riverpod state)
+lib/ui               app (router, theme), shell (tabs), logo, avatar, bluetooth_card, setup_sheet, in_app_alert
+android/…/MainActivity.kt, LibRateApplication.kt   FLAG_SECURE, apkPath, BT enable, openUrl, cached engine
+tool/                relay test tools (pub, sub, who, dm)</pre>
+
+<h2>2. Wire format</h2>
+<p>A frame is a compact binary structure. Fields in order:</p>
+<table>
+  <tr><th>version</th><td>1 byte</td></tr>
+  <tr><th>type</th><td>1 byte — room text, DM, charter, ban, dismantle, hand-off, ack, cover</td></tr>
+  <tr><th>ttl</th><td>1 byte — starts at 7, decremented per hop, <b>zeroed when computing the signature</b></td></tr>
+  <tr><th>timestamp</th><td>8 bytes, ms since epoch</td></tr>
+  <tr><th>sender</th><td>32-byte x-only public key</td></tr>
+  <tr><th>target</th><td>room tag (UTF-8, length-prefixed) or recipient pubkey for DMs</td></tr>
+  <tr><th>payload</th><td>length-prefixed bytes — plaintext, or ciphertext for DMs / password rooms</td></tr>
+  <tr><th>signature</th><td>64-byte BIP-340 Schnorr over all preceding bytes with ttl = 0</td></tr>
+</table>
+<p><b>Frame id</b> = SHA-256 of the signed bytes (ttl zeroed). Identical on Bluetooth and relay paths.
+Frames larger than a BLE link's MTU are split into numbered fragments per link and reassembled by the peer;
+fragmentation is a link-layer concern and never changes the frame or its id.</p>
+
+<h3>Nostr mapping</h3>
+<p>Each frame is carried as a Nostr event: <code>kind 23333</code> for room traffic and <code>kind 24444</code> for
+direct traffic (both ephemeral-range, so relays need not persist them). The event <code>content</code> is the
+base64 frame; tags carry the room tag for subscription filtering. The event is signed with the same key, so
+relays enforce authenticity too. A relay's <code>OK</code> reply advances the tick to <i>sent</i>.</p>
+
+<h2>3. Routing (MeshEngine)</h2>
+<div class="diagram">inbound(frame, via)
+  ├─ verify signature ─────────────── fail → drop
+  ├─ seen.contains(id)? ───────────── yes  → drop            (dedup set, time-bounded)
+  ├─ seen.add(id)
+  ├─ deliver → MeshService             (room joined / DM for me / governance record)
+  ├─ ttl &gt; 1 ?  → ttl−1 → BLE.sendAll(except origin link)   (flood once)
+  ├─ via == BLE  &amp;&amp; relays connected → Nostr.publish        (bridge up)
+  └─ via == Nostr                    → BLE.sendAll            (bridge down)
+
+outbound(frame)
+  ├─ seen.add(id); deliver locally as <i>pending</i>
+  ├─ BLE.sendAll        → first peer accept → <i>delivered</i> (on echo)
+  └─ Nostr.publish      → OK ack → <i>sent</i>; no relay → queued, retried on connect</div>
+<p>Per-conversation delivery state flows back through a <code>deliveries</code> stream. Store-and-forward keeps
+recent frames keyed by target; when a new BLE link appears, frames addressed to that peer (or, before it is
+identified, all held frames) are replayed.</p>
+
+<h2>4. Bluetooth transport</h2>
+<ul>
+  <li><b>Dual role.</b> Each phone advertises a GATT service (peripheral) <i>and</i> scans for it (central). Two
+      independent state machines; each restarts on its own with backoff.</li>
+  <li><b>GATT.</b> One service UUID; <code>RX</code> characteristic (central writes to peripheral) and <code>TX</code>
+      (peripheral notifies central). Both directions fragment to the negotiated MTU (request 517; fall back
+      to 180-byte chunks when the stack reports the 20-byte default).</li>
+  <li><b>Duty cycle.</b> Scanning is windowed to save power; <i>battery saver</i> shortens the window
+      (2 s every 22 s). Links are capped per role.</li>
+  <li><b>Transient failures</b> (e.g. GATT status 8, supervision timeout) are treated as noise: the link is
+      cleaned up, the peer is rediscovered, and the UI shows a hint rather than an error once relinked.</li>
+  <li><b>Permissions.</b> <code>BLUETOOTH_SCAN / CONNECT / ADVERTISE</code> (Android 12+) requested from the UI
+      with an Activity; the foreground service never prompts.</li>
+</ul>
+
+<h2>5. Cryptography</h2>
+<table>
+  <tr><th>Identity</th><td>secp256k1; x-only public key; BIP-340 Schnorr signatures; <code>npub</code> bech32 encoding.</td></tr>
+  <tr><th>Direct messages</th><td>NIP-44 v2: ECDH → HKDF-SHA256 conversation key → per-message nonce → ChaCha20 + HMAC-SHA256,
+      padded. Verified against the published test vectors. Read receipts are NIP-44 payloads <code>{"ack":[ids]}</code>.</td></tr>
+  <tr><th>Password rooms</th><td>Argon2id(password, salt = room tag) → 32-byte key; XChaCha20-Poly1305 with a random 24-byte
+      nonce per message. Tag is derived from the name, so the password never appears on the wire.</td></tr>
+  <tr><th>Governed groups</th><td>Tag <code>#name.&lt;16 hex of creator key&gt;</code>. Charter = signed(admins, description).
+      Ban = signed(member, seq) by an admin — higher seq wins. Dismantle = signed by creator. Each phone validates
+      against the creator key embedded in the tag.</td></tr>
+  <tr><th>Identity rotation</th><td>Hand-off record signed by the <i>old</i> key naming the new key; recipients re-key the
+      contact locally. Groups created by the old key are dismantled.</td></tr>
+  <tr><th>At rest</th><td>Message store encrypted with a device key held in Android Keystore-backed secure storage; the
+      private key lives in secure storage only. <code>allowBackup=false</code>.</td></tr>
+</table>
+
+<h2>6. Storage and lifecycle</h2>
+<ul>
+  <li><b>Retention</b>: <code>0</code> forever · <code>N</code> days (sweeper) · <code>-1</code> memory only (never written).</li>
+  <li><b>Settings</b> in SharedPreferences: relays, joined rooms, retention, cover traffic, battery saver,
+      screenshots, onboarding, setup-hint snooze, notifications, theme.</li>
+  <li><b>Background</b>: an Application-owned cached <code>FlutterEngine</code> survives Activity destruction;
+      a foreground service with a persistent notification keeps the process alive. Battery-optimisation exemption
+      is requested once and re-checked on resume.</li>
+  <li><b>Notifications</b>: channels <code>librate_dm</code> / <code>librate_rooms</code>, visibility <i>private</i>,
+      per-conversation mutes; in-app banner overlay when the app is open on another screen; Nearby never notifies.</li>
+  <li><b>Navigation</b>: Nearby · Rooms · Chats · Settings tabs; conversations are children of their tab; tapping a
+      tab always returns to its list.</li>
+</ul>
+
+<h2>7. Build and release</h2>
+<pre>flutter pub get &amp;&amp; flutter analyze
+flutter build apk --release --split-per-abi --obfuscate --split-debug-info=symbols</pre>
+<ul>
+  <li>Flutter 3.47 / Dart 3.13 · <code>minSdk 26</code>, <code>targetSdk 36</code> · package <code>com.librate.mesh</code>.</li>
+  <li>Release signing from <code>android/key.properties</code> (git-ignored) → keystore in <code>android/keys/</code> (git-ignored).
+      Certificate SHA-256 <span class="fp">7F:05:8A:F1:48:8C:A4:0A:AF:B2:14:86:D7:7A:64:24:19:9B:00:30:BB:38:A0:44:FA:11:B7:8D:7A:78:15:B6</span>.</li>
+  <li>Per-ABI APKs with <code>SHA256SUMS.txt</code>; obfuscation symbols kept offline for crash symbolication.</li>
+  <li>Resource shrinker keeps the notification icon via <code>res/raw/keep.xml</code>; core-library desugaring enabled.</li>
+</ul>
+
+<h2>8. Threat model</h2>
+<table>
+  <tr><th>Adversary</th><th style="width:37%">Can</th><th>Cannot</th></tr>
+  <tr><td>Bystander with a Bluetooth sniffer</td><td>See that LibRate is running; read Nearby and open-room text; observe traffic timing.</td>
+      <td>Read DMs or password rooms; forge messages; identify the person behind a key.</td></tr>
+  <tr><td>Relay operator / network observer</td><td>See public-room frames, sender keys, timestamps, client IPs.</td>
+      <td>Read DMs, password rooms or receipts; alter frames; tell which phone originated a bridged frame.</td></tr>
+  <tr><td>Someone with the APK</td><td>Build a modified app.</td>
+      <td>Install it over a genuine one (different signature); make it pass a hash check.</td></tr>
+  <tr><td>Someone holding an unlocked phone</td><td>Read everything on it.</td>
+      <td>— Mitigations: screenshots blocked, panic wipe, memory-only retention, no backup.</td></tr>
+  <tr><td>A chat partner</td><td>Screenshot or forward what you wrote.</td><td>Prove you wrote it to a third party without your key? They can — signatures are non-repudiable. Say less.</td></tr>
+</table>
+<p><b>Known limitations.</b> DM recipient keys are visible on the wire (metadata). Message IDs and timestamps allow
+traffic analysis. Hop counts leak rough topology. Cover traffic reduces, not removes, timing analysis. No
+forward secrecy in NIP-44 — a leaked private key decrypts past DMs that are still stored.</p>
+
+<h2>9. Extending</h2>
+<ul>
+  <li><b>New transport</b> (e.g. Wi-Fi Aware): implement the transport interface (inbound stream, <code>send</code>,
+      <code>peers</code>) and register it with the engine — no change to frames or services.</li>
+  <li><b>New relay</b>: any Nostr relay; see <code>docs/RELAY.md</code> for strfry + Caddy and mirroring.</li>
+  <li><b>Probabilistic rebroadcast</b> for very dense crowds and a configurable TTL are straightforward engine changes
+      if field data shows air-time saturation.</li>
+</ul>
+
+<footer>LibRate · Document 4 of 4 · source: github.com/Keshav-Kumar-Agastya/Librate · Contact: keshavgithub01@gmail.com</footer>
+</body>
+</html>
